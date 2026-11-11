@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SRI Supermarket System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header>
+    <a href="dashboard.html" class="brand">
+      <span class="brand-icon">🛒</span>
+      <span>SRI Supermarket</span>
+    </a>
+    <nav>
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="product.html" class="active">📦 Products</a>
+      <a href="stock.html">📈 Stock & Sales</a>
+      <a href="suppliers.html">👥 Suppliers</a>
+      <a href="index.html" class="logout-link" onclick="logout()">Logout</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <div class="container">
+    <div class="page-title">
+      <h1>📦 Grocery & Products Management</h1>
+      <p>Add new Indian grocery items, food products, pulses, spices, and manage inventory</p>
+    </div>
+
+    <div class="grid-2">
+      <!-- Add Product Form -->
+      <div class="card">
+        <h2>➕ Add New Item</h2>
+        <form id="add-product-form">
+          <!-- Next Sequential Product ID Display -->
+          <div class="form-group">
+            <label for="prod-id-preview">Product ID (Auto Assigned)</label>
+            <input type="text" id="prod-id-preview" value="#1" readonly style="background: #101e30; color: #34d399; font-weight: bold; cursor: not-allowed; border-color: #10b981;">
+          </div>
+
+          <div class="form-group">
+            <label for="prod-name">Product / Item Name *</label>
+            <input type="text" id="prod-name" placeholder="e.g. Aashirvaad Shudh Chakki Atta 5kg" required>
+          </div>
+
+          <div class="form-group">
+            <label for="prod-category">Category *</label>
+            <input type="text" id="prod-category" placeholder="e.g. Atta & Flour, Pulses, Dairy, Spices, Snacks" required>
+          </div>
+
+          <div class="form-group">
+            <label for="prod-supplier">Supplier / Distributor *</label>
+            <select id="prod-supplier" required>
+              <option value="">Select Distributor</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="prod-cost">Cost Price (₹) *</label>
+            <input type="number" id="prod-cost" step="0.50" min="0" placeholder="0.00" required>
+          </div>
+
+          <div class="form-group">
+            <label for="prod-sell">Selling Price (MRP ₹) *</label>
+            <input type="number" id="prod-sell" step="0.50" min="0" placeholder="0.00" required>
+          </div>
+
+          <div class="form-group">
+            <label for="prod-stock">Initial Stock Quantity *</label>
+            <input type="number" id="prod-stock" min="0" placeholder="e.g. 50" required>
+          </div>
+
+          <button type="submit" class="btn btn-success btn-block">💾 Save Product</button>
+        </form>
+      </div>
+
+      <!-- Products List -->
+      <div class="card">
+        <h2>📋 Products & Grocery Catalog</h2>
+        
+        <!-- Search bar -->
+        <div class="search-bar">
+          <input type="text" id="search-input" placeholder="🔍 Search items by name (Atta, Rice, Dal, Milk, etc.)..." oninput="filterProducts()">
+        </div>
+
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Item Name</th>
+                <th>Category</th>
+                <th>Cost (₹)</th>
+                <th>Price (₹)</th>
+                <th>Stock</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="products-tbody">
+              <tr><td colspan="7" style="text-align: center; color: #829ab1;">Loading grocery items...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allProducts = [];
+
+    function logout() {
+      localStorage.removeItem('user');
+    }
+
+    // Load Suppliers for dropdown
+    async function loadSuppliers() {
+      try {
+        const res = await fetch('/api/suppliers');
+        const suppliers = await res.json();
+        const select = document.getElementById('prod-supplier');
+        select.innerHTML = '<option value="">Select Distributor</option>' +
+          suppliers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+      } catch (err) {
+        console.error('Error loading suppliers:', err);
+      }
+    }
+
+    // Load Products for table and update Next Product ID preview
+    async function loadProducts() {
+      try {
+        const res = await fetch('/api/products');
+        allProducts = await res.json();
+        renderProducts(allProducts);
+
+        // Update Next Product ID preview in the Add Product form
+        const nextId = allProducts.length + 1;
+        const idPreview = document.getElementById('prod-id-preview');
+        if (idPreview) {
+          idPreview.value = `#${nextId}`;
+        }
+      } catch (err) {
+        console.error('Error loading products:', err);
+      }
+    }
+
+    // Render Products to table (strictly in sequential order)
+    function renderProducts(list) {
+      const tbody = document.getElementById('products-tbody');
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; color: #829ab1;">No grocery items found</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(p => {
+        const stockBadge = p.stock < 10 
+          ? `<span class="badge badge-red">Low (${p.stock})</span>`
+          : `<span class="badge badge-green">${p.stock} units</span>`;
+
+        return `
+          <tr>
+            <td><strong>#${p.id}</strong></td>
+            <td><strong>${p.name}</strong></td>
+            <td><span class="badge badge-blue">${p.category}</span></td>
+            <td>₹${Number(p.costPrice).toFixed(2)}</td>
+            <td>₹${Number(p.sellPrice).toFixed(2)}</td>
+            <td>${stockBadge}</td>
+            <td>
+              <button class="btn btn-danger btn-sm" onclick="deleteProduct(${p.id}, '${p.name}')">Delete</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // Filter products on typing
+    function filterProducts() {
+      const q = document.getElementById('search-input').value.toLowerCase();
+      const filtered = allProducts.filter(p => 
+        p.name.toLowerCase().includes(q) || (p.category && p.category.toLowerCase().includes(q))
+      );
+      renderProducts(filtered);
+    }
+
+    // Delete Product & Re-order IDs sequentially
+    async function deleteProduct(id, name) {
+      if (!confirm(`Are you sure you want to delete Product #${id} ("${name}")?\n\nAll subsequent product IDs will automatically adjust in order.`)) return;
+
+      try {
+        const res = await fetch(`/api/products/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          // Reload products which refreshes the table and updates the next ID preview
+          await loadProducts();
+        } else {
+          alert('Failed to delete product');
+        }
+      } catch (err) {
+        alert('Error deleting product');
+      }
+    }
+
+    // Add Product Form Submit
+    document.getElementById('add-product-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const newProduct = {
+        name: document.getElementById('prod-name').value,
+        category: document.getElementById('prod-category').value,
+        supplierId: document.getElementById('prod-supplier').value,
+        costPrice: document.getElementById('prod-cost').value,
+        sellPrice: document.getElementById('prod-sell').value,
+        initialStock: document.getElementById('prod-stock').value
+      };
+
+      try {
+        const res = await fetch('/api/products', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newProduct)
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          alert(`Product added successfully as #${created.id} - ${created.name}!`);
+          document.getElementById('add-product-form').reset();
+          await loadProducts();
+        } else {
+          const err = await res.json();
+          alert(err.error || 'Failed to add product');
+        }
+      } catch (err) {
+        alert('Error connecting to server');
+      }
+    });
+
+    // Initialize
+    loadSuppliers();
+    loadProducts();
+  </script>
+</body>
+</html>

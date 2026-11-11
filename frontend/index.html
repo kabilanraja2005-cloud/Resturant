@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SRI Supermarket System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="login-page">
+
+  <div class="login-box">
+    <div style="font-size: 40px; margin-bottom: 10px;">🛒</div>
+    <h1>SRI Supermarket</h1>
+    <p>KrishnaSri Supermarket Billing Management</p>
+
+    <div id="login-error" class="alert-message"></div>
+
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" placeholder="Enter username" required autocomplete="username">
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" placeholder="Enter password" required autocomplete="current-password">
+      </div>
+
+      <button type="submit" class="btn btn-success btn-block" style="margin-top: 10px;">Login to Store Dashboard</button>
+    </form>
+
+  </div>
+
+  <script>
+    
+    document.getElementById('login-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errorBox = document.getElementById('login-error');
+      errorBox.style.display = 'none';
+
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
+
+      try {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          errorBox.textContent = data.error || 'Invalid credentials';
+          errorBox.style.display = 'block';
+          return;
+        }
+
+        // Store user in localStorage
+        localStorage.setItem('user', JSON.stringify(data.user));
+
+        // Redirect to dashboard
+        window.location.href = 'dashboard.html';
+      } catch (err) {
+        errorBox.textContent = 'Unable to connect to server';
+        errorBox.style.display = 'block';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SRI Supermarket System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header>
+    <a href="dashboard.html" class="brand">
+      <span class="brand-icon">🛒</span>
+      <span>SRI Supermarket</span>
+    </a>
+    <nav>
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="product.html">📦 Products</a>
+      <a href="stock.html">📈 Stock & Sales</a>
+      <a href="suppliers.html" class="active">👥 Suppliers</a>
+      <a href="index.html" class="logout-link" onclick="logout()">Logout</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <div class="container">
+    <div class="page-title">
+      <h1>👥 Supplier & Distributor Directory</h1>
+      <p>Manage wholesale distributors, FMCG suppliers, and contact phone numbers</p>
+    </div>
+
+    <div class="grid-2">
+      <!-- Add Supplier Form -->
+      <div class="card">
+        <h2>➕ Add New Distributor / Supplier</h2>
+        <form id="add-supplier-form">
+          <div class="form-group">
+            <label for="supp-id-preview">Supplier ID (Auto Assigned)</label>
+            <input type="text" id="supp-id-preview" value="#1" readonly style="background: #101e30; color: #34d399; font-weight: bold; cursor: not-allowed; border-color: #10b981;">
+          </div>
+
+          <div class="form-group">
+            <label for="supp-name">Company / Distributor Name *</label>
+            <input type="text" id="supp-name" placeholder="e.g. Tata Consumer Products Ltd" required>
+          </div>
+
+          <div class="form-group">
+            <label for="supp-email">Contact Email</label>
+            <input type="email" id="supp-email" placeholder="distributor@example.in">
+          </div>
+
+          <div class="form-group">
+            <label for="supp-phone">Phone Number (+91) *</label>
+            <input type="text" id="supp-phone" placeholder="e.g. +91 98201 12345" required>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">💾 Save Supplier</button>
+        </form>
+      </div>
+
+      <!-- Suppliers List Table -->
+      <div class="card">
+        <h2>📋 Registered Indian Distributors</h2>
+
+        <div class="search-bar">
+          <input type="text" id="search-supp-input" placeholder="🔍 Search suppliers by name or phone..." oninput="filterSuppliers()">
+        </div>
+
+        <div class="table-responsive">
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Distributor Name</th>
+                <th>Email Contact</th>
+                <th>Phone Number</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="suppliers-tbody">
+              <tr><td colspan="5" style="text-align: center; color: #829ab1;">Loading distributors...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allSuppliers = [];
+
+    function logout() {
+      localStorage.removeItem('user');
+    }
+
+    // Load Suppliers & update Next Supplier ID preview
+    async function loadSuppliers() {
+      try {
+        const res = await fetch('/api/suppliers');
+        allSuppliers = await res.json();
+        renderSuppliers(allSuppliers);
+
+        // Update Next ID preview
+        const nextId = allSuppliers.length + 1;
+        const idPreview = document.getElementById('supp-id-preview');
+        if (idPreview) {
+          idPreview.value = `#${nextId}`;
+        }
+      } catch (err) {
+        console.error('Error loading suppliers:', err);
+      }
+    }
+
+    // Render Suppliers Table
+    function renderSuppliers(list) {
+      const tbody = document.getElementById('suppliers-tbody');
+      if (list.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: #829ab1;">No suppliers found</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = list.map(s => `
+        <tr>
+          <td><strong>#${s.id}</strong></td>
+          <td><strong>${s.name}</strong></td>
+          <td>${s.contact || 'N/A'}</td>
+          <td>${s.phone || 'N/A'}</td>
+          <td>
+            <button class="btn btn-danger btn-sm" onclick="deleteSupplier(${s.id}, '${s.name}')">Delete</button>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    // Filter Suppliers
+    function filterSuppliers() {
+      const q = document.getElementById('search-supp-input').value.toLowerCase();
+      const filtered = allSuppliers.filter(s => 
+        s.name.toLowerCase().includes(q) || (s.contact && s.contact.toLowerCase().includes(q)) || (s.phone && s.phone.includes(q))
+      );
+      renderSuppliers(filtered);
+    }
+
+    // Delete Supplier & Re-order IDs sequentially
+    async function deleteSupplier(id, name) {
+      if (!confirm(`Are you sure you want to delete Supplier #${id} ("${name}")?`)) return;
+
+      try {
+        const res = await fetch(`/api/suppliers/${id}`, { method: 'DELETE' });
+        const data = await res.json();
+        if (res.ok) {
+          await loadSuppliers();
+        } else {
+          alert(data.error || 'Failed to delete supplier');
+        }
+      } catch (err) {
+        alert('Error deleting supplier');
+      }
+    }
+
+    // Form Submit
+    document.getElementById('add-supplier-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const newSupplier = {
+        name: document.getElementById('supp-name').value,
+        contact: document.getElementById('supp-email').value,
+        phone: document.getElementById('supp-phone').value
+      };
+
+      try {
+        const res = await fetch('/api/suppliers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSupplier)
+        });
+
+        if (res.ok) {
+          const created = await res.json();
+          alert(`Supplier registered successfully as #${created.id} - ${created.name}!`);
+          document.getElementById('add-supplier-form').reset();
+          await loadSuppliers();
+        } else {
+          const err = await res.json();
+          alert(err.error || 'Failed to add supplier');
+        }
+      } catch (err) {
+        alert('Server connection error');
+      }
+    });
+
+    loadSuppliers();
+  </script>
+</body>
+</html>

@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SRI Supermarket System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Navigation Bar -->
+  <header>
+    <a href="dashboard.html" class="brand">
+      <span class="brand-icon">🛒</span>
+      <span>SRI Supermarket</span>
+    </a>
+    <nav>
+      <a href="dashboard.html">📊 Dashboard</a>
+      <a href="product.html">📦 Products</a>
+      <a href="stock.html" class="active">📈 Stock & Sales</a>
+      <a href="suppliers.html">👥 Suppliers</a>
+      <a href="index.html" class="logout-link" onclick="logout()">Logout</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <div class="container">
+    <div class="page-title">
+      <h1>📈 Stock Management & Billing Counter</h1>
+      <p>Billing counter checkout (UPI, Cash, Card), stock inventory levels, and supplier restock</p>
+    </div>
+
+    <!-- Forms Row -->
+    <div class="grid-2">
+      <!-- Section A: Checkout / Record Sale -->
+      <div class="card">
+        <h2>🧾 Billing Counter (New Sale)</h2>
+        <form id="sale-form">
+          <div class="form-group">
+            <label for="sale-product">Select Product / Item *</label>
+            <select id="sale-product" required onchange="updateSaleTotal()">
+              <option value="">Select Item</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="sale-qty">Quantity (Units / Packets / Kg) *</label>
+            <input type="number" id="sale-qty" min="1" value="1" required oninput="updateSaleTotal()">
+          </div>
+
+          <div class="form-group">
+            <label for="sale-payment">Payment Method</label>
+            <select id="sale-payment">
+              <option value="UPI (GPay / PhonePe / Paytm)">📱 UPI (GPay / PhonePe / Paytm)</option>
+              <option value="Cash">💵 Cash</option>
+              <option value="Card">💳 Debit / Credit Card</option>
+            </select>
+          </div>
+
+          <div style="background: #101e30; padding: 12px; border-radius: 6px; margin-bottom: 14px; display: flex; justify-content: space-between;">
+            <span>Bill Amount:</span>
+            <strong id="sale-total-display" style="color: #34d399; font-size: 18px;">₹0.00</strong>
+          </div>
+
+          <button type="submit" class="btn btn-primary btn-block">⚡ Complete Bill & Checkout</button>
+        </form>
+      </div>
+
+      <!-- Section B: Restock (Stock In) -->
+      <div class="card">
+        <h2>📥 Restock Stock (Inward Goods)</h2>
+        <form id="restock-form">
+          <div class="form-group">
+            <label for="restock-product">Select Item to Restock *</label>
+            <select id="restock-product" required onchange="handleRestockProductChange()">
+              <option value="">Select Item</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="restock-qty">Restock Quantity *</label>
+            <input type="number" id="restock-qty" min="1" placeholder="e.g. 50" required oninput="updateRestockTotal()">
+          </div>
+
+          <div class="form-group">
+            <label for="restock-cost">Purchase Cost per Unit (₹) *</label>
+            <input type="number" id="restock-cost" step="0.50" min="0" placeholder="0.00" required oninput="updateRestockTotal()">
+          </div>
+
+          <div style="background: #101e30; padding: 12px; border-radius: 6px; margin-bottom: 14px; display: flex; justify-content: space-between;">
+            <span>Total Inward Cost:</span>
+            <strong id="restock-total-display" style="color: #60a5fa; font-size: 18px;">₹0.00</strong>
+          </div>
+
+          <button type="submit" class="btn btn-success btn-block">➕ Add Inward Stock</button>
+        </form>
+      </div>
+    </div>
+
+    <!-- Section C: Current Inventory Overview Table -->
+    <div class="card" style="margin-top: 24px;">
+      <h2>📦 Current Stock Availability</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Item Name</th>
+              <th>Category</th>
+              <th>Price (₹)</th>
+              <th>Stock Status</th>
+            </tr>
+          </thead>
+          <tbody id="stock-tbody">
+            <tr><td colspan="5" style="text-align: center; color: #829ab1;">Loading stock inventory...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let productsList = [];
+
+    function logout() {
+      localStorage.removeItem('user');
+    }
+
+    // Load Products into selects and table
+    async function loadStockData() {
+      try {
+        const res = await fetch('/api/products');
+        productsList = await res.json();
+
+        // Populate Sale select
+        const saleSelect = document.getElementById('sale-product');
+        saleSelect.innerHTML = '<option value="">Select Item</option>' +
+          productsList.map(p => {
+            const out = p.stock <= 0 ? ' (OUT OF STOCK)' : ` (Available: ${p.stock})`;
+            return `<option value="${p.id}" ${p.stock <= 0 ? 'disabled' : ''}>${p.name} - ₹${p.sellPrice.toFixed(2)}${out}</option>`;
+          }).join('');
+
+        // Populate Restock select
+        const restockSelect = document.getElementById('restock-product');
+        restockSelect.innerHTML = '<option value="">Select Item</option>' +
+          productsList.map(p => `<option value="${p.id}">${p.name} (Current Stock: ${p.stock})</option>`).join('');
+
+        // Populate Table
+        const tbody = document.getElementById('stock-tbody');
+        tbody.innerHTML = productsList.map(p => {
+          let badge;
+          if (p.stock === 0) {
+            badge = '<span class="badge badge-red">Out of Stock (0)</span>';
+          } else if (p.stock < 10) {
+            badge = `<span class="badge badge-red">Low Stock (${p.stock})</span>`;
+          } else {
+            badge = `<span class="badge badge-green">${p.stock} units</span>`;
+          }
+
+          return `
+            <tr>
+              <td>#${p.id}</td>
+              <td><strong>${p.name}</strong></td>
+              <td><span class="badge badge-blue">${p.category}</span></td>
+              <td>₹${p.sellPrice.toFixed(2)}</td>
+              <td>${badge}</td>
+            </tr>
+          `;
+        }).join('');
+
+        updateSaleTotal();
+      } catch (err) {
+        console.error('Failed to load stock data:', err);
+      }
+    }
+
+    // Calculate Sale Total
+    function updateSaleTotal() {
+      const prodId = Number(document.getElementById('sale-product').value);
+      const qty = parseInt(document.getElementById('sale-qty').value, 10) || 0;
+      const product = productsList.find(p => p.id === prodId);
+
+      if (product && qty > 0) {
+        const total = qty * product.sellPrice;
+        document.getElementById('sale-total-display').textContent = `₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+      } else {
+        document.getElementById('sale-total-display').textContent = '₹0.00';
+      }
+    }
+
+    // Handle restock product selection
+    function handleRestockProductChange() {
+      const prodId = Number(document.getElementById('restock-product').value);
+      const product = productsList.find(p => p.id === prodId);
+      if (product) {
+        document.getElementById('restock-cost').value = product.costPrice.toFixed(2);
+      }
+      updateRestockTotal();
+    }
+
+    // Calculate Restock Total
+    function updateRestockTotal() {
+      const qty = parseInt(document.getElementById('restock-qty').value, 10) || 0;
+      const cost = parseFloat(document.getElementById('restock-cost').value) || 0;
+      const total = qty * cost;
+      document.getElementById('restock-total-display').textContent = `₹${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}`;
+    }
+
+    // Submit Sale
+    document.getElementById('sale-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const productId = document.getElementById('sale-product').value;
+      const quantity = document.getElementById('sale-qty').value;
+      const paymentMethod = document.getElementById('sale-payment').value;
+
+      try {
+        const res = await fetch('/api/sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId, quantity, paymentMethod, cashier: 'Ramesh Cashier' })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert(`Bill generated successfully! Total: ₹${Number(data.total).toFixed(2)} (${paymentMethod})`);
+          document.getElementById('sale-form').reset();
+          loadStockData();
+        } else {
+          alert(data.error || 'Failed to complete sale');
+        }
+      } catch (err) {
+        alert('Server connection error');
+      }
+    });
+
+    // Submit Restock
+    document.getElementById('restock-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const productId = document.getElementById('restock-product').value;
+      const quantity = document.getElementById('restock-qty').value;
+      const unitCost = document.getElementById('restock-cost').value;
+
+      try {
+        const res = await fetch('/api/purchases', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ productId, quantity, unitCost })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          alert(`Restocked ${quantity} units of ${data.productName}! Total: ₹${Number(data.total).toFixed(2)}`);
+          document.getElementById('restock-form').reset();
+          document.getElementById('restock-total-display').textContent = '₹0.00';
+          loadStockData();
+        } else {
+          alert(data.error || 'Failed to record restock');
+        }
+      } catch (err) {
+        alert('Server connection error');
+      }
+    });
+
+    loadStockData();
+  </script>
+</body>
+</html>
